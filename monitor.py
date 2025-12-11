@@ -5,7 +5,6 @@ import asyncio
 from playwright.async_api import async_playwright
 
 # --- CONFIG ---
-# These load the secrets you saved in GitHub Settings
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
@@ -37,11 +36,9 @@ def send_alert(text):
         print(f"Error sending message: {e}")
 
 async def check_twitch(page, user):
-    """Checks Twitch source code for live status"""
     try:
         await page.goto(f"https://www.twitch.tv/{user}", wait_until="domcontentloaded")
         content = await page.content()
-        # Twitch adds this hidden text when live
         if '"isLiveBroadcast":true' in content:
             return True
     except:
@@ -49,7 +46,6 @@ async def check_twitch(page, user):
     return False
 
 async def check_kick(page, user):
-    """Checks Kick API via browser to bypass bot protection"""
     try:
         await page.goto(f"https://kick.com/api/v1/channels/{user}", wait_until="networkidle")
         text = await page.evaluate("document.body.innerText")
@@ -63,7 +59,13 @@ async def check_kick(page, user):
 async def main():
     print("--- Starting Check ---")
     
-    # 1. Load previous state (who was live last time?)
+    # === FORCE TEST MESSAGE ===
+    # This will send a message every time the script runs (every ~20 mins).
+    # Once you confirm it works, you can delete this line later to stop the spam.
+    send_alert("✅ <b>System Test:</b> Bot is running and checking streams!") 
+    # ==========================
+
+    # 1. Load previous state
     state = {}
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, "r") as f:
@@ -79,7 +81,6 @@ async def main():
             is_live = False
             key = f"{s['platform']}_{s['user']}"
             
-            # Run the check based on platform
             if s['platform'] == "Twitch":
                 is_live = await check_twitch(page, s['user'])
             elif s['platform'] == "Kick":
