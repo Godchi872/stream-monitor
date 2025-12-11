@@ -36,9 +36,11 @@ def send_alert(text):
         print(f"Error sending message: {e}")
 
 async def check_twitch(page, user):
+    """Checks Twitch source code for live status"""
     try:
         await page.goto(f"https://www.twitch.tv/{user}", wait_until="domcontentloaded")
         content = await page.content()
+        # Twitch adds this hidden text when live
         if '"isLiveBroadcast":true' in content:
             return True
     except:
@@ -46,12 +48,21 @@ async def check_twitch(page, user):
     return False
 
 async def check_kick(page, user):
+    """Checks Kick Profile Page (Bypasses API Block)"""
     try:
-        await page.goto(f"https://kick.com/api/v1/channels/{user}", wait_until="networkidle")
-        text = await page.evaluate("document.body.innerText")
-        data = json.loads(text)
-        if data.get("livestream"):
+        # We go to the real profile page now
+        await page.goto(f"https://kick.com/{user}", wait_until="networkidle")
+        content = await page.content()
+        
+        # When live, Kick puts "livestream":{"id":...} in the code.
+        # When offline, it says "livestream":null
+        if '"livestream":{"id":' in content:
             return True
+            
+        # Backup check: Look for the visible "LIVE" badge text
+        if await page.locator(".live-tag").count() > 0:
+            return True
+            
     except:
         pass
     return False
@@ -59,12 +70,6 @@ async def check_kick(page, user):
 async def main():
     print("--- Starting Check ---")
     
-    # === FORCE TEST MESSAGE ===
-    # This will send a message every time the script runs (every ~20 mins).
-    # Once you confirm it works, you can delete this line later to stop the spam.
-    send_alert("✅ <b>System Test:</b> Bot is running and checking streams!") 
-    # ==========================
-
     # 1. Load previous state
     state = {}
     if os.path.exists(STATE_FILE):
@@ -73,8 +78,14 @@ async def main():
             except: pass
 
     async with async_playwright() as p:
+        # Launch browser (headless=True is standard, but you can change to False if debugging locally)
         browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+        
+        # Create a context with a real user agent to trick Kick
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        page = await context.new_page()
         
         # 2. Check each streamer
         for s in STREAMERS:
