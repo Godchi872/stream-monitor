@@ -18,6 +18,7 @@ STREAMERS = [
     {"platform": "Kick", "user": "ilyaselmaliki", "url": "https://kick.com/ilyaselmaliki"},
 
     # --- TWITCH ---
+    {"platform": "Twitch", "user": "era1s",        "url": "https://twitch.tv/era1s"},  # <--- Added permanently
     {"platform": "Twitch", "user": "naimiforever", "url": "https://twitch.tv/naimiforever"},
     {"platform": "Twitch", "user": "naimi",        "url": "https://twitch.tv/naimi"},
     {"platform": "Twitch", "user": "shake_make",   "url": "https://twitch.tv/shake_make"},
@@ -40,6 +41,7 @@ async def check_twitch(page, user):
     try:
         await page.goto(f"https://www.twitch.tv/{user}", wait_until="domcontentloaded")
         content = await page.content()
+        # Twitch adds this hidden text when live
         if '"isLiveBroadcast":true' in content:
             return True
     except:
@@ -59,20 +61,14 @@ async def check_kick(page, user):
         # Get the text on the screen
         content = await page.evaluate("document.body.innerText")
         
-        # DEBUG: Print first 50 chars to see if we are blocked
-        # print(f"DEBUG {user}: {content[:50]}") 
-
         # Try to parse it as JSON
         data = json.loads(content)
         
         # If we got JSON, check the 'livestream' field
         if data.get("livestream"):
             return True
-    except Exception as e:
-        # If this fails, it usually means Cloudflare blocked us completely (Timeout)
-        # print(f"Kick Check Failed for {user}: {e}")
+    except:
         pass
-        
     return False
 
 async def main():
