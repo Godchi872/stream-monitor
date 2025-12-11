@@ -1,0 +1,37 @@
+name: Stream Monitor
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'  # Runs every 20 minutes
+  workflow_dispatch:      # Allows you to click a button to run it manually
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install requests playwright
+          playwright install chromium
+          
+      - name: Run Monitor
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: python monitor.py
+
+      - name: Save State (Commit changes)
+        run: |
+          git config --global user.name "StreamBot"
+          git config --global user.email "bot@noreply.github.com"
+          git add stream_state.json || true
+          git commit -m "Update stream state" || true
+          git push
