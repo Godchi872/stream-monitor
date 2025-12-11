@@ -40,7 +40,6 @@ async def check_twitch(page, user):
     try:
         await page.goto(f"https://www.twitch.tv/{user}", wait_until="domcontentloaded")
         content = await page.content()
-        # Twitch adds this hidden text when live
         if '"isLiveBroadcast":true' in content:
             return True
     except:
@@ -48,23 +47,32 @@ async def check_twitch(page, user):
     return False
 
 async def check_kick(page, user):
-    """Checks Kick Profile Page (Bypasses API Block)"""
+    """Checks Kick Hidden API to bypass visual blocks"""
+    url = f"https://kick.com/api/v1/channels/{user}"
     try:
-        # We go to the real profile page now
-        await page.goto(f"https://kick.com/{user}", wait_until="networkidle")
-        content = await page.content()
+        # Go to the API URL directly
+        await page.goto(url, wait_until="commit")
         
-        # When live, Kick puts "livestream":{"id":...} in the code.
-        # When offline, it says "livestream":null
-        if '"livestream":{"id":' in content:
+        # Wait a few seconds for Cloudflare to 'solve' itself
+        await page.wait_for_timeout(5000)
+
+        # Get the text on the screen
+        content = await page.evaluate("document.body.innerText")
+        
+        # DEBUG: Print first 50 chars to see if we are blocked
+        # print(f"DEBUG {user}: {content[:50]}") 
+
+        # Try to parse it as JSON
+        data = json.loads(content)
+        
+        # If we got JSON, check the 'livestream' field
+        if data.get("livestream"):
             return True
-            
-        # Backup check: Look for the visible "LIVE" badge text
-        if await page.locator(".live-tag").count() > 0:
-            return True
-            
-    except:
+    except Exception as e:
+        # If this fails, it usually means Cloudflare blocked us completely (Timeout)
+        # print(f"Kick Check Failed for {user}: {e}")
         pass
+        
     return False
 
 async def main():
@@ -78,12 +86,10 @@ async def main():
             except: pass
 
     async with async_playwright() as p:
-        # Launch browser (headless=True is standard, but you can change to False if debugging locally)
+        # Launch browser with a specific 'User Agent' to look like a Real PC
         browser = await p.chromium.launch(headless=True)
-        
-        # Create a context with a real user agent to trick Kick
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         )
         page = await context.new_page()
         
@@ -100,9 +106,12 @@ async def main():
             # 3. Logic: Only notify if they went from Offline -> Online
             was_live = state.get(key, False)
             
+            # If they are live NOW but were NOT live LAST TIME -> Send Alert
             if is_live and not was_live:
                 send_alert(f"🚨 <b>{s['user']}</b> is LIVE on {s['platform']}!\n{s['url']}")
                 state[key] = True
+            
+            # If they are offline
             elif not is_live:
                 state[key] = False
             
