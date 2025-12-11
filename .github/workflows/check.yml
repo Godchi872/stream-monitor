@@ -1,6 +1,22 @@
 name: Stream Monitor
 
 on:
+name: Stream Monitor
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
+
+# --- ADD THIS BLOCK HERE ---
+permissions:
+  contents: write
+# ---------------------------
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # ... rest of the file ...
   schedule:
     - cron: '*/20 * * * *'  # Runs every 20 minutes
   workflow_dispatch:      # Allows you to click a button to run it manually
